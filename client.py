@@ -15,8 +15,6 @@ def listen(sock):
             if not data:
                 break
             
-            # Use buffer splitting if needed, or simple parsing for now
-            # (Assuming router sends clean lines)
             for line in data.split('\n'):
                 if not line.strip(): continue
                 pkt = Packet.from_json(line)
@@ -37,11 +35,9 @@ def main():
         print("Could not connect to Router. Is it running?")
         return
 
-    # Start listening in the background
     listener = threading.Thread(target=listen, args=(sock,), daemon=True)
     listener.start()
 
-    # === MAIN MENU LOOP ===
     while True:
         print("\n" + "="*20)
         print(f" PC: {my_ip} (Connected)")
@@ -57,7 +53,7 @@ def main():
                 try:
                     dest = input("Destination IP: ")
                     if dest.lower() == "exit": 
-                        break # Break inner loop, return to menu
+                        break # Break the inner loop and return to menu
 
                     size = int(input("Size (KB): "))
                     ptype = input("Type (text/image/video): ")
@@ -92,13 +88,11 @@ def main():
                         print("Router unreachable. Stopping sender.")
                         break
 
-                    time.sleep(1) # Send every 1 second
+                    time.sleep(1)
             except KeyboardInterrupt:
-                # This catches the Ctrl+C
                 print("\n\n[STOPPED] Automatic sending stopped.")
                 print("Returning to Main Menu...")
                 time.sleep(0.5) 
-                # Loop continues back to the start of 'while True'
 
         elif choice == "3":
             print("Disconnecting...")

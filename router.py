@@ -5,14 +5,12 @@ import json
 from datetime import datetime
 from packet import Packet
 
-# ==========================================
-# 1. ROUTER CONFIGURATION
-# ==========================================
-HOST = "0.0.0.0"
-PORT = 5000        # Traffic Port
-ADMIN_PORT = 6000  # Controller Port (NEW)
 
-# Shared Config (Now mutable by Controller)
+HOST = "0.0.0.0"
+PORT = 5000    # From Traffic comes
+ADMIN_PORT = 6000 # From Admin/COntroller commnad comes
+
+#shared one configs for the router simualtion
 config = {
     "TOTAL_CAPACITY_KBPS": 1000,
     "QUOTA_LIMIT_KB": 5000,
@@ -21,21 +19,18 @@ config = {
     "RECOVERY_INTERVAL": 5
 }
 
-# Quality of Service (QoS) Weights
+# dictionaty for the priory of type and it's weight
 PRIORITY_WEIGHTS = {
     "video": 1.0,   
     "image": 0.5,   
     "text":  0.2    
 }
 
-# Global State
-clients = {}       # ip -> socket
-client_usage = {}  # ip -> total_kb_used
+
+clients = {}     
+client_usage = {}
 usage_lock = threading.Lock() 
 
-# ==========================================
-# 2. ADMIN LISTENER (NEW FEATURE)
-# ==========================================
 def handle_admin(sock):
     print(f"\n[ADMIN] Controller connected.")
     try:
@@ -43,7 +38,7 @@ def handle_admin(sock):
             data = sock.recv(1024).decode()
             if not data: break
             
-            command = json.loads(data)
+            command = json.loads(data) # .load() work as parser here.
             action = command.get("action")
             value = command.get("value")
 
@@ -52,7 +47,7 @@ def handle_admin(sock):
                 print(f"[ADMIN] UPDATE: Set {action} to {value}")
                 sock.send(f"Success: {action} -> {value}".encode())
             elif action == "GET_CONFIG":
-                sock.send(json.dumps(config).encode())
+                sock.send(json.dumps(config).encode()) # It will just send whole dict to print. 
             else:
                 sock.send("Error: Unknown command".encode())
     except:
@@ -69,9 +64,6 @@ def start_admin_server():
         sock, _ = server.accept()
         threading.Thread(target=handle_admin, args=(sock,), daemon=True).start()
 
-# ==========================================
-# 3. BACKGROUND TASKS (Quota Manager)
-# ==========================================
 def quota_manager():
     while True:
         time.sleep(config["RECOVERY_INTERVAL"]) # Use dynamic config
@@ -82,7 +74,7 @@ def quota_manager():
             
             if users_needing_refill:
                 rate = config["RECOVERY_RATE_KB"] # Use dynamic config
-                print(f"\n[SYSTEM] ♻️  Refilling Quotas (-{rate}KB)...")
+                print(f"\n[SYSTEM]   Refilling Quotas (-{rate}KB)...")
                 
                 for ip in users_needing_refill:
                     client_usage[ip] = max(0, client_usage[ip] - rate)
@@ -91,9 +83,7 @@ def quota_manager():
                     status = "RECOVERING" if client_usage[ip] > limit else "OK"
                     print(f"    ↳ {ip}: {client_usage[ip]}/{limit} KB [{status}]")
 
-# ==========================================
-# 4. CLIENT HANDLING (Traffic)
-# ==========================================
+
 def handle_client(sock, ip):
     curr_time = datetime.now().strftime("%H:%M:%S")
     print(f"[{curr_time}] [CONNECTION] PC Connected: {ip}")
@@ -118,7 +108,7 @@ def handle_client(sock, ip):
                     packet = Packet.from_json(message)
                 except: continue
 
-                # --- SMART LOGIC (Using Dynamic Config) ---
+                
                 with usage_lock:
                     client_usage[ip] += packet.size_kb
                     current_usage = client_usage[ip]
@@ -134,7 +124,7 @@ def handle_client(sock, ip):
                 p_type = packet.payload_type.lower()
                 priority = PRIORITY_WEIGHTS.get(p_type, 0.5)
                 allowed_speed = base_speed * priority
-                # ------------------------------------------
+
 
                 curr_time = datetime.now().strftime("%H:%M:%S")
                 status_tag = "[FUP-PENALTY]" if is_penalized else "[OK]"
@@ -160,14 +150,11 @@ def handle_client(sock, ip):
         if ip in clients: del clients[ip]
         print(f"[CONNECTION] PC Disconnected: {ip}")
 
-# ==========================================
-# 5. MAIN ROUTER START
-# ==========================================
 def start_router():
-    # Start Admin Server Thread
+    # Throw the thread for the controller
     threading.Thread(target=start_admin_server, daemon=True).start()
     
-    # Start Quota Manager Thread
+    # THrow the thread for the Quota Management calc
     threading.Thread(target=quota_manager, daemon=True).start()
 
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

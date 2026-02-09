@@ -49,10 +49,7 @@ def main():
             print("Invalid option.")
             continue
 
-        # Send Command
         sock.send(json.dumps(command).encode())
-        
-        # Get Response
         response = sock.recv(1024).decode()
         print(f"\n[ROUTER RESPONSE]: {response}\n")
 
